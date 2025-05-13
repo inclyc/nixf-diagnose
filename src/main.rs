@@ -23,7 +23,7 @@ struct Args {
     input: String,
 
     /// Enable variable lookup analysis
-    #[arg(long, default_missing_value="true", num_args=0..=1)]
+    #[arg(long, default_value_t = true, default_missing_value="true", num_args=0..=1)]
     variable_lookup: bool,
 }
 
