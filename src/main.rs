@@ -1,60 +1,49 @@
 use ariadne::{Label, Report, ReportKind, Source};
-use clap::{App, Arg};
+use clap::Parser;
 use serde_json::Value;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use which::which;
 
-fn main() {
-    let matches = App::new("nixf-diagnose")
-        .version("0.1.0")
-        .author("Yingchi Long <longyingchi24s@ict.ac.cn>")
-        .about("CLI wrapper for nixf-tidy with fancy diagnostic output")
-        .arg(
-            Arg::with_name("nixf-tidy-path")
-                .long("nixf-tidy-path")
-                .value_name("PATH")
-                .help("Path to the nixf-tidy executable")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("input")
-                .long("input")
-                .short("i")
-                .value_name("FILE")
-                .help("Input source file")
-                .required(true)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("variable-lookup")
-                .long("variable-lookup")
-                .value_name("BOOL")
-                .help("Enable variable lookup analysis")
-                .default_value("true")
-                .takes_value(true),
-        )
-        .get_matches();
+/// CLI wrapper for nixf-tidy with fancy diagnostic output
+#[derive(Parser)]
+#[command(
+    name = "nixf-diagnose",
+    version = "0.1.0",
+    author = "Yingchi Long <longyingchi24s@ict.ac.cn>"
+)]
+struct Args {
+    /// Path to the nixf-tidy executable
+    #[arg(long)]
+    nixf_tidy_path: Option<String>,
 
-    let nixf_tidy_path = matches
-        .value_of("nixf-tidy-path")
-        .map(|p| p.to_string())
-        .or_else(|| which("nixf-tidy").ok().map(|p| p.display().to_string()))
-        .or(
-            option_env!("NIXF_TIDY_PATH")
-                .map(|p| p.to_string())
-        )
+    /// Input source file
+    #[arg(short = 'i', long, required = true)]
+    input: String,
+
+    /// Enable variable lookup analysis
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
+    variable_lookup: bool,
+}
+
+fn main() {
+    let args = Args::parse();
+
+    // Try to determine nixf-tidy path in order:
+    // 1. Provided CLI argument
+    // 2. Compile-time constant (from build script)
+    // 3. Runtime discovery via `which`
+    let nixf_tidy_path = args
+        .nixf_tidy_path
+        .or(option_env!("NIXF_TIDY_PATH").map(|s| s.to_string()))
+        .or(which("nixf-tidy").ok().map(|p| p.display().to_string()))
         .expect("nixf-tidy executable not found in PATH or --nixf-tidy-path not provided");
 
-    let input_file = matches.value_of("input").unwrap();
-    let variable_lookup = matches
-        .value_of("variable-lookup")
-        .unwrap()
-        .parse::<bool>()
-        .unwrap_or(true);
+    let input_file = args.input;
+    let variable_lookup = args.variable_lookup;
 
-    let mut cmd = Command::new(nixf_tidy_path);
+    let mut cmd = Command::new(&nixf_tidy_path);
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
 
     if variable_lookup {
@@ -62,7 +51,7 @@ fn main() {
     }
 
     let mut input = String::new();
-    File::open(input_file)
+    File::open(&input_file)
         .expect("Failed to open input file")
         .read_to_string(&mut input)
         .expect("Failed to read input file");
@@ -122,10 +111,10 @@ fn main() {
                         .get("rCur")
                         .and_then(|e| e.get("offset").and_then(|o| o.as_u64())),
                 ) {
-                    let mut report = Report::build(report_kind, input_file, start as usize)
+                    let mut report = Report::build(report_kind, &input_file, start as usize)
                         .with_message(&formatted_message)
                         .with_label(
-                            Label::new((input_file, start as usize..end as usize))
+                            Label::new((&input_file, start as usize..end as usize))
                                 .with_message(&formatted_message),
                         );
 
@@ -155,7 +144,7 @@ fn main() {
                                 ) {
                                     report = report.with_label(
                                         Label::new((
-                                            input_file,
+                                            &input_file,
                                             note_start as usize..note_end as usize,
                                         ))
                                         .with_message(&formatted_note_message),
@@ -166,7 +155,7 @@ fn main() {
                     }
 
                     let source = Source::from(&input);
-                    report.finish().print((input_file, source)).unwrap();
+                    report.finish().print((&input_file, source)).unwrap();
                 }
             }
         }
