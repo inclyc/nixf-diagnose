@@ -10,7 +10,7 @@ use which::which;
 #[derive(Parser)]
 #[command(
     name = "nixf-diagnose",
-    version = "0.1.0",
+    version = "0.1.1",
     author = "Yingchi Long <longyingchi24s@ict.ac.cn>"
 )]
 struct Args {
