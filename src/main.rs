@@ -29,6 +29,20 @@ struct Args {
 
 type NixfReport<'a> = (Report<(&'a str, std::ops::Range<usize>)>, &'a str, Source);
 
+fn build_char_byte_table(s: &str) -> Vec<usize> {
+    let mut table = Vec::new();
+    let mut byte_pos = 0;
+    for c in s.chars() {
+        table.push(byte_pos);
+        byte_pos += c.len_utf8();
+    }
+    table
+}
+
+fn byte_to_char_offset(table: &[usize], byte_pos: usize) -> usize {
+    table.binary_search(&byte_pos).unwrap()
+}
+
 fn process_file<'a>(
     variable_lookup: bool,
     nixf_tidy_path: &str,
@@ -56,6 +70,8 @@ fn process_file<'a>(
         .unwrap()
         .write_all(input.as_bytes())
         .unwrap();
+
+    let char_byte_table = build_char_byte_table(&input);
 
     let output = child
         .wait_with_output()
@@ -112,10 +128,12 @@ fn process_file<'a>(
                         .get("rCur")
                         .and_then(|e| e.get("offset").and_then(|o| o.as_u64())),
                 ) {
-                    let mut report = Report::build(report_kind, input_file, start as usize)
+                    let start_char = byte_to_char_offset(&char_byte_table, start as usize);
+                    let end_char = byte_to_char_offset(&char_byte_table, end as usize);
+                    let mut report = Report::build(report_kind, input_file, start_char)
                         .with_message(&formatted_message)
                         .with_label(
-                            Label::new((input_file, start as usize..end as usize))
+                            Label::new((input_file, start_char..end_char))
                                 .with_message(&formatted_message),
                         );
 
@@ -143,10 +161,12 @@ fn process_file<'a>(
                                         .get("rCur")
                                         .and_then(|e| e.get("offset").and_then(|o| o.as_u64())),
                                 ) {
+                                    let start_char = byte_to_char_offset(&char_byte_table, note_start as usize);
+                                    let end_char = byte_to_char_offset(&char_byte_table, note_end as usize);
                                     report = report.with_label(
                                         Label::new((
                                             input_file,
-                                            note_start as usize..note_end as usize,
+                                            start_char..end_char,
                                         ))
                                         .with_message(&formatted_note_message),
                                     );
