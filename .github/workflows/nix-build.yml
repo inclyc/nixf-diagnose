@@ -1,0 +1,21 @@
+name: Nix build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  flake-default:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: cachix/install-nix-action@v31
+      with:
+        github_access_token: ${{ secrets.GITHUB_TOKEN }}
+    - uses: actions/checkout@v4
+    - name: Build flake
+      run: nix build -L #.
