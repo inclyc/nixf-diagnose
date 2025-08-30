@@ -23,6 +23,12 @@ struct Args {
     #[arg(long, default_value_t = true, default_missing_value="true", num_args=0..=1)]
     variable_lookup: bool,
 
+    /// Ignore diagnostics with specific ids
+    ///
+    /// This option can be specified multiple times
+    #[arg(short, long, value_name = "ID")]
+    ignore: Vec<String>,
+
     /// Input source files
     files: Vec<String>,
 }
@@ -46,6 +52,7 @@ fn byte_to_char_offset(table: &[usize], byte_pos: usize) -> usize {
 fn process_file<'a>(
     variable_lookup: bool,
     nixf_tidy_path: &str,
+    ignore_rules: &[String],
     input_file: &'a str,
 ) -> Vec<NixfReport<'a>> {
     let mut cmd = Command::new(nixf_tidy_path);
@@ -95,13 +102,24 @@ fn process_file<'a>(
 
     if let Some(diags) = diagnostics.as_array() {
         for diag in diags {
-            if let (Some(message), Some(spans), Some(severity), Some(args), Some(notes)) = (
+            if let (
+                Some(sname),
+                Some(message),
+                Some(spans),
+                Some(severity),
+                Some(args),
+                Some(notes),
+            ) = (
+                diag.get("sname"),
                 diag.get("message"),
                 diag.get("range"),
                 diag.get("severity"),
                 diag.get("args"),
                 diag.get("notes"),
             ) {
+                if ignore_rules.iter().any(|rule| rule == sname) {
+                    continue; // Ignore this diagnostic
+                }
                 let report_kind = match severity.as_i64().unwrap_or(1) {
                     0 => ReportKind::Error,
                     1 => ReportKind::Error,
@@ -135,7 +153,7 @@ fn process_file<'a>(
                         .with_label(
                             Label::new((input_file, start_char..end_char))
                                 .with_message(&formatted_message),
-                        );
+                        ).with_code(sname.as_str().unwrap());
 
                     if let Some(notes_array) = notes.as_array() {
                         for note in notes_array {
@@ -198,10 +216,11 @@ fn main() {
 
     let files = args.files;
     let variable_lookup = args.variable_lookup;
+    let ignore = args.ignore;
 
     let all_reports: Vec<_> = files
         .par_iter()
-        .flat_map(|file| process_file(variable_lookup, &nixf_tidy_path, file))
+        .flat_map(|file| process_file(variable_lookup, &nixf_tidy_path, &ignore, file))
         .collect();
 
     if !all_reports.is_empty() {
