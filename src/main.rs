@@ -24,7 +24,9 @@ struct Args {
     variable_lookup: bool,
 
     /// Ignore diagnostics with specific ids
-    #[arg(short, long, value_name = "IDs")]
+    ///
+    /// This option can be specified multiple times
+    #[arg(short, long, value_name = "ID")]
     ignore: Vec<String>,
 
     /// Input source files
