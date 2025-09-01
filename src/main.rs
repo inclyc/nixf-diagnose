@@ -29,11 +29,40 @@ struct Args {
     #[arg(short, long, value_name = "ID")]
     ignore: Vec<String>,
 
+    /// Automatically apply fixes to source files
+    #[arg(long)]
+    auto_fix: bool,
+
     /// Input source files
     files: Vec<String>,
 }
 
 type NixfReport<'a> = (Report<(&'a str, std::ops::Range<usize>)>, &'a str, Source);
+
+#[derive(Debug, Clone)]
+struct Edit {
+    range: std::ops::Range<usize>,
+    new_text: String,
+}
+
+fn apply_fixes_to_content(content: &str, edits: &[Edit]) -> String {
+    if edits.is_empty() {
+        return content.to_string();
+    }
+
+    // Sort fixes by start position in reverse order to apply from end to beginning
+    let mut sorted_fixes = edits.to_vec();
+    sorted_fixes.sort_by(|a, b| b.range.start.cmp(&a.range.start));
+
+    let mut result = content.to_string();
+    for fix in sorted_fixes {
+        if fix.range.end <= result.len() {
+            result.replace_range(fix.range.clone(), &fix.new_text);
+        }
+    }
+
+    result
+}
 
 fn build_char_byte_table(s: &str) -> Vec<usize> {
     let mut table = Vec::new();
@@ -53,6 +82,7 @@ fn process_file<'a>(
     variable_lookup: bool,
     nixf_tidy_path: &str,
     ignore_rules: &[String],
+    auto_fix: bool,
     input_file: &'a str,
 ) -> Vec<NixfReport<'a>> {
     let mut cmd = Command::new(nixf_tidy_path);
@@ -99,6 +129,7 @@ fn process_file<'a>(
     };
 
     let mut reports = vec![];
+    let mut all_edits = vec![];
 
     if let Some(diags) = diagnostics.as_array() {
         for diag in diags {
@@ -109,6 +140,7 @@ fn process_file<'a>(
                 Some(severity),
                 Some(args),
                 Some(notes),
+                Some(fixes), // Vec<Fix>, // Fix = { edits, message }
             ) = (
                 diag.get("sname"),
                 diag.get("message"),
@@ -116,10 +148,49 @@ fn process_file<'a>(
                 diag.get("severity"),
                 diag.get("args"),
                 diag.get("notes"),
+                diag.get("fixes"),
             ) {
                 if ignore_rules.iter().any(|rule| rule == sname) {
                     continue; // Ignore this diagnostic
                 }
+
+                // Collect fixes for auto-fix functionality
+                if auto_fix {
+                    if let Some(fixes_array) = fixes.as_array() {
+                        if fixes_array.len() > 0 {
+                            if fixes_array.len() > 1 {
+                                eprintln!(
+                                    "Warning: Multiple fixes found for a single diagnostic in file '{input_file}'. Only the first fix will be applied."
+                                );
+                            }
+                            let first_fix = fixes_array.first().unwrap();
+                            if let Some(edits) = first_fix.get("edits").and_then(|e| e.as_array()) {
+                                for edit in edits {
+                                    if let (Some(new_text), Some(range)) = (
+                                        edit.get("newText").and_then(|t| t.as_str()),
+                                        edit.get("range"),
+                                    ) {
+                                        if let (Some(start), Some(end)) = (
+                                            range
+                                                .get("lCur")
+                                                .and_then(|s| s.get("offset").and_then(|o| o.as_u64())),
+                                            range
+                                                .get("rCur")
+                                                .and_then(|e| e.get("offset").and_then(|o| o.as_u64())),
+                                        ) {
+                                            all_edits.push(Edit {
+                                                range: (start as usize)..(end as usize),
+                                                new_text: new_text.to_string(),
+                                            });
+                                        }
+                                    }
+                                }
+                                continue
+                            }
+                        }
+                    }
+                }
+
                 let report_kind = match severity.as_i64().unwrap_or(1) {
                     0 => ReportKind::Error,
                     1 => ReportKind::Error,
@@ -153,7 +224,8 @@ fn process_file<'a>(
                         .with_label(
                             Label::new((input_file, start_char..end_char))
                                 .with_message(&formatted_message),
-                        ).with_code(sname.as_str().unwrap());
+                        )
+                        .with_code(sname.as_str().unwrap());
 
                     if let Some(notes_array) = notes.as_array() {
                         for note in notes_array {
@@ -179,14 +251,13 @@ fn process_file<'a>(
                                         .get("rCur")
                                         .and_then(|e| e.get("offset").and_then(|o| o.as_u64())),
                                 ) {
-                                    let start_char = byte_to_char_offset(&char_byte_table, note_start as usize);
-                                    let end_char = byte_to_char_offset(&char_byte_table, note_end as usize);
+                                    let start_char =
+                                        byte_to_char_offset(&char_byte_table, note_start as usize);
+                                    let end_char =
+                                        byte_to_char_offset(&char_byte_table, note_end as usize);
                                     report = report.with_label(
-                                        Label::new((
-                                            input_file,
-                                            start_char..end_char,
-                                        ))
-                                        .with_message(&formatted_note_message),
+                                        Label::new((input_file, start_char..end_char))
+                                            .with_message(&formatted_note_message),
                                     );
                                 }
                             }
@@ -195,6 +266,16 @@ fn process_file<'a>(
                     reports.push((report.finish(), input_file, Source::from(&input)));
                 }
             }
+        }
+    }
+
+    // Apply edits if auto_fix is enabled
+    if auto_fix && !all_edits.is_empty() {
+        let fixed_content = apply_fixes_to_content(&input, &all_edits);
+        if let Err(e) = std::fs::write(input_file, fixed_content) {
+            eprintln!("Failed to write fixed content to {input_file}: {e}");
+        } else {
+            eprintln!("Applied {} edits to {}", all_edits.len(), input_file);
         }
     }
 
@@ -216,11 +297,12 @@ fn main() {
 
     let files = args.files;
     let variable_lookup = args.variable_lookup;
+    let auto_fix = args.auto_fix;
     let ignore = args.ignore;
 
     let all_reports: Vec<_> = files
         .par_iter()
-        .flat_map(|file| process_file(variable_lookup, &nixf_tidy_path, &ignore, file))
+        .flat_map(|file| process_file(variable_lookup, &nixf_tidy_path, &ignore, auto_fix, file))
         .collect();
 
     if !all_reports.is_empty() {

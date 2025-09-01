@@ -45,6 +45,7 @@ Error: duplicated attrname `a`
 | `-h, --help`                            | Print help                                                                     |
 | `-V, --version`                         | Print version                                                                  |
 | `-i, --ignore <ID>`                     | Ignore diagnostics with specific ids <br /> This can be used multiple times    |
+| `--auto-fix`                            | Automatically apply fixes to source files                                      |
 
 
 ## Author
