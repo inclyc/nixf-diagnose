@@ -48,11 +48,6 @@ Error: duplicated attrname `a`
 | `-o, --only <ID>`                       | Only run a single diagnostic                                                   |
 | `--auto-fix`                            | Automatically apply fixes to source files                                      |
 
-
-## Author
-
-Yingchi Long <longyingchi24s@ict.ac.cn>
-
 ## License
 
 This project is licensed under the MIT License.
