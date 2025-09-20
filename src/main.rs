@@ -29,6 +29,10 @@ struct Args {
     #[arg(short, long, value_name = "ID")]
     ignore: Vec<String>,
 
+    /// Only run a single diagnostic
+    #[arg(short, long)]
+    only: Option<String>,
+
     /// Automatically apply fixes to source files
     #[arg(long)]
     auto_fix: bool,
@@ -84,6 +88,7 @@ fn process_file<'a>(
     variable_lookup: bool,
     nixf_tidy_path: &str,
     ignore_rules: &[String],
+    only: &Option<String>,
     auto_fix: bool,
     input_file: &'a str,
 ) -> Vec<NixfReport<'a>> {
@@ -152,6 +157,12 @@ fn process_file<'a>(
                 diag.get("notes"),
                 diag.get("fixes"),
             ) {
+                if let Some(rule) = only {
+                    if rule != sname {
+                        continue; // Ignore all except --only
+                    }
+                }
+
                 if ignore_rules.iter().any(|rule| rule == sname) {
                     continue; // Ignore this diagnostic
                 }
@@ -304,10 +315,11 @@ fn main() {
     let variable_lookup = args.variable_lookup;
     let auto_fix = args.auto_fix;
     let ignore = args.ignore;
+    let only = args.only;
 
     let all_reports: Vec<_> = files
         .par_iter()
-        .flat_map(|file| process_file(variable_lookup, &nixf_tidy_path, &ignore, auto_fix, file))
+        .flat_map(|file| process_file(variable_lookup, &nixf_tidy_path, &ignore, &only, auto_fix, file))
         .collect();
 
     if !all_reports.is_empty() {
