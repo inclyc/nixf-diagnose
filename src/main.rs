@@ -50,7 +50,9 @@ fn apply_fixes_to_content(content: &str, edits: &[Edit]) -> String {
         return content.to_string();
     }
 
-    // Sort fixes by start position in reverse order to apply from end to beginning
+    // Sort fixes by start position in reverse order to apply from end to beginning.
+    // This is to avoid the location markers from getting out of sync once the first
+    // edit is done.
     let mut sorted_fixes = edits.to_vec();
     sorted_fixes.sort_by(|a, b| b.range.start.cmp(&a.range.start));
 
@@ -155,7 +157,10 @@ fn process_file<'a>(
                 }
 
                 // Collect fixes for auto-fix functionality
-                if auto_fix {
+                // TODO: We currently limit this to one edit per file per run, until
+                // https://github.com/inclyc/nixf-diagnose/issues/13
+                // is sorted out.
+                if auto_fix && all_edits.len() == 0 {
                     if let Some(fixes_array) = fixes.as_array() {
                         if fixes_array.len() > 0 {
                             if fixes_array.len() > 1 {
