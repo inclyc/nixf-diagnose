@@ -25,7 +25,7 @@ struct Args {
 
     /// Ignore diagnostics with specific ids
     ///
-    /// This can be ucsed multiple times
+    /// This can be used multiple times
     #[arg(short, long, value_name = "ID")]
     ignore: Vec<String>,
 
@@ -160,7 +160,7 @@ fn process_file<'a>(
                         if fixes_array.len() > 0 {
                             if fixes_array.len() > 1 {
                                 eprintln!(
-                                    "Warning: Multiple fixes found for a single diagnostic in file '{input_file}'. Only the first fix will be applied."
+                                    "Warning: Multiple fixes found for a single diagnostic. Only the first fix will be applied to '{input_file}'."
                                 );
                             }
                             let first_fix = fixes_array.first().unwrap();
