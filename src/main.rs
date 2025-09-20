@@ -25,7 +25,7 @@ struct Args {
 
     /// Ignore diagnostics with specific ids
     ///
-    /// This option can be specified multiple times
+    /// This can be ucsed multiple times
     #[arg(short, long, value_name = "ID")]
     ignore: Vec<String>,
 
