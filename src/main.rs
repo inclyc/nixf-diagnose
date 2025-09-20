@@ -25,7 +25,7 @@ struct Args {
 
     /// Ignore diagnostics with specific ids
     ///
-    /// This can be ucsed multiple times
+    /// This can be used multiple times
     #[arg(short, long, value_name = "ID")]
     ignore: Vec<String>,
 
@@ -50,7 +50,9 @@ fn apply_fixes_to_content(content: &str, edits: &[Edit]) -> String {
         return content.to_string();
     }
 
-    // Sort fixes by start position in reverse order to apply from end to beginning
+    // Sort fixes by start position in reverse order to apply from end to beginning.
+    // This is to avoid the location markers from getting out of sync once the first
+    // edit is done.
     let mut sorted_fixes = edits.to_vec();
     sorted_fixes.sort_by(|a, b| b.range.start.cmp(&a.range.start));
 
@@ -155,12 +157,15 @@ fn process_file<'a>(
                 }
 
                 // Collect fixes for auto-fix functionality
-                if auto_fix {
+                // TODO: We currently limit this to one edit per file per run, until
+                // https://github.com/inclyc/nixf-diagnose/issues/13
+                // is sorted out.
+                if auto_fix && all_edits.len() == 0 {
                     if let Some(fixes_array) = fixes.as_array() {
                         if fixes_array.len() > 0 {
                             if fixes_array.len() > 1 {
                                 eprintln!(
-                                    "Warning: Multiple fixes found for a single diagnostic in file '{input_file}'. Only the first fix will be applied."
+                                    "Warning: Multiple fixes found for a single diagnostic. Only the first fix will be applied to '{input_file}'."
                                 );
                             }
                             let first_fix = fixes_array.first().unwrap();
