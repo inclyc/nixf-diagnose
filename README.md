@@ -44,7 +44,9 @@ Error: duplicated attrname `a`
 | `--variable-lookup [<VARIABLE_LOOKUP>]` | Enable variable lookup analysis [default: true] [possible values: true, false] |
 | `-h, --help`                            | Print help                                                                     |
 | `-V, --version`                         | Print version                                                                  |
-| `-i, --ignore <ID>`                    | Ignore diagnostics with specific ids <br /> This option can be specified multiple times                                        |
+| `-i, --ignore <ID>`                     | Ignore diagnostics with specific ids <br /> This can be used multiple times    |
+| `-o, --only <ID>`                       | Only run a single diagnostic                                                   |
+| `--auto-fix`                            | Automatically apply fixes to source files                                      |
 
 
 ## Author
