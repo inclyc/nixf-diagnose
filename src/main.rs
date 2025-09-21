@@ -122,7 +122,7 @@ fn process_file<'a>(
         .unwrap_or_else(|e| panic!("Failed to read output: {}", e));
 
     if !output.status.success() {
-        eprintln!("nixf-tidy failed on file '{}'", input_file);
+        eprintln!("nixf-tidy failed on file '{input_file}'");
         return vec![];
     }
 
@@ -130,7 +130,7 @@ fn process_file<'a>(
     let diagnostics: Value = match serde_json::from_str(&stdout) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("Failed to parse JSON from nixf-tidy output: {}", e);
+            eprintln!("Failed to parse JSON from nixf-tidy output: {e}");
             return vec![];
         }
     };
@@ -171,9 +171,9 @@ fn process_file<'a>(
                 // TODO: We currently limit this to one edit per file per run, until
                 // https://github.com/inclyc/nixf-diagnose/issues/13
                 // is sorted out.
-                if auto_fix && all_edits.len() == 0 {
+                if auto_fix && all_edits.is_empty() {
                     if let Some(fixes_array) = fixes.as_array() {
-                        if fixes_array.len() > 0 {
+                        if !fixes_array.is_empty() {
                             if fixes_array.len() > 1 {
                                 eprintln!(
                                     "Warning: Multiple fixes found for a single diagnostic. Only the first fix will be applied to '{input_file}'."
